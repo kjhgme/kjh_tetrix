@@ -28,4 +28,8 @@ public:
 
 	UPROPERTY(BlueprintReadWrite)
 	TSubclassOf<AActor> BGActorClass;
+
+	TArray<AActor*> SpawnedBlocks;
+
+	bool bHasBeenSet = false;
 };

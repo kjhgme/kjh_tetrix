@@ -25,4 +25,35 @@ public:
 
 	UPROPERTY(BlueprintReadWrite)
 	TArray<TSubclassOf<AActor>> Blocks;
+
+	UPROPERTY(BlueprintReadWrite)
+	AActor* SpawnedBlock;
+
+	TArray<AActor*> PlacedBlocks;
+
+	UFUNCTION(BlueprintCallable)
+	void SpawnBlock();
+
+	UFUNCTION(BlueprintCallable)
+	void MoveLeft();
+
+	UFUNCTION(BlueprintCallable)
+	void MoveRight();
+
+	UFUNCTION(BlueprintCallable)
+	void MoveDown();
+
+	UFUNCTION(BlueprintCallable)
+	void MoveToBottom();
+
+	UFUNCTION(BlueprintCallable)
+	void GetMapSize(int GridX, int GridY)
+	{
+		GridSizeX = GridX;
+		GridSizeY = GridY;
+	}
+
+	int GridSizeX;
+	int GridSizeY;
+
 };

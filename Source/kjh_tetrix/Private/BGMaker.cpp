@@ -27,12 +27,37 @@ void ABGMaker::Tick(float DeltaTime)
 
 void ABGMaker::MapSetting(int x, int y)
 {
-	for (int i = 0; i < x; ++i)
+	if (bHasBeenSet == true)
 	{
-		for (int j = 0; j < y; ++j)
+		for (AActor* Block : SpawnedBlocks)
 		{
-			GetWorld()->SpawnActor<AActor>(BGActorClass);
+			if (Block)
+			{
+				Block->Destroy();
+			}
 		}
-	}
-}
+		SpawnedBlocks.Empty();
+	}	
 
+	float StartY = -(x - 1) * 25.0f;
+	FVector Loc = { -50.0f, StartY, 25.0f };
+
+	for (int i = 0; i < y; ++i)
+	{
+		Loc.Y = StartY;
+
+		for (int j = 0; j < x; ++j)
+		{
+			AActor* BGBlock = GetWorld()->SpawnActor<AActor>(BGActorClass);
+			if (!BGBlock) continue;
+
+			BGBlock->SetActorLocation(Loc);
+			SpawnedBlocks.Add(BGBlock);
+			Loc.Y += 50.0f;
+		}
+
+		Loc.Z += 50.0f;
+	}
+
+	bHasBeenSet = true;
+}
