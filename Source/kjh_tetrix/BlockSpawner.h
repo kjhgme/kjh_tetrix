@@ -30,9 +30,8 @@ public:
 	AActor* SpawnedBlock;
 
 	TArray<AActor*> PlacedBlocks;
-	
-	TArray<USceneComponent*> AllComponents;
-	TArray<AActor*> ValidBlocks;
+
+	TArray<int32> ZCount;
 
 	UFUNCTION(BlueprintCallable)
 	void SpawnBlock();
@@ -51,6 +50,8 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 	void Rotate();
+
+	bool IsCollidingWithAnything() const;
 
 	void CheckAndClearLines();
 

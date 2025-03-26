@@ -20,7 +20,6 @@ ABlockSpawner::ABlockSpawner()
 void ABlockSpawner::BeginPlay()
 {
 	Super::BeginPlay();
-	
 }
 
 // Called every frame
@@ -32,6 +31,8 @@ void ABlockSpawner::Tick(float DeltaTime)
 
 void ABlockSpawner::SpawnBlock()
 {
+    ZCount.SetNum(GridSizeX);
+
     CheckAndClearLines();
 
     if (Blocks.Num() == 0) return;
@@ -226,151 +227,285 @@ void ABlockSpawner::MoveToBottom()
 
 void ABlockSpawner::Rotate()
 {
-    SpawnedBlock->AddActorWorldRotation(FRotator(0.0f, 0.0f, 90.0f));
+    if (!SpawnedBlock) return;
+
+    // 1. 초기 상태 저장
+    const FRotator OriginalRotation = SpawnedBlock->GetActorRotation();
+    const FVector OriginalLocation = SpawnedBlock->GetActorLocation();
+
+    // 2. 회전 실행
+    SpawnedBlock->SetActorRotation(OriginalRotation + FRotator(0, 0, 90));
+
+    // 3. 충돌 검사 및 조정
+    FVector TotalAdjustment(0);
+    bool bNeedMoreCheck = true;
+    int32 SafetyCounter = 0;
+
+    while (bNeedMoreCheck && SafetyCounter++ < 10)
+    {
+        bNeedMoreCheck = false;
+        FVector RequiredAdjustment(0);
+
+        // 모든 컴포넌트에 대한 충돌 검사
+        TArray<UActorComponent*> Components;
+        SpawnedBlock->GetComponents(Components);
+
+        for (UActorComponent* Component : Components)
+        {
+            USceneComponent* SceneComp = Cast<USceneComponent>(Component);
+            if (!SceneComp) continue;
+
+            FVector CompLocation = SceneComp->GetComponentLocation();
+
+            // 경계 영역 검사
+            const float MinY = -(GridSizeX - 1) * 25.0f;
+            const float MaxY = GridSizeX * 25.0f;
+            const float MinZ = 25.0f;
+
+            // 왼쪽 경계
+            if (CompLocation.Y < MinY)
+            {
+                RequiredAdjustment.Y += 50.0f;
+                bNeedMoreCheck = true;
+            }
+            // 오른쪽 경계
+            else if (CompLocation.Y > MaxY)
+            {
+                RequiredAdjustment.Y -= 50.0f;
+                bNeedMoreCheck = true;
+            }
+
+            // 바닥 경계
+            if (CompLocation.Z < MinZ)
+            {
+                RequiredAdjustment.Z += 50.0f;
+                bNeedMoreCheck = true;
+            }
+
+            // 다른 블록과의 충돌 검사
+            for (AActor* PlacedBlock : PlacedBlocks)
+            {
+                if (!PlacedBlock) continue;
+
+                TArray<UActorComponent*> PlacedComponents;
+                PlacedBlock->GetComponents(PlacedComponents);
+
+                for (UActorComponent* PlacedComponent : PlacedComponents)
+                {
+                    USceneComponent* PlacedSceneComp = Cast<USceneComponent>(PlacedComponent);
+                    if (!PlacedSceneComp) continue;
+
+                    FVector PlacedLocation = PlacedSceneComp->GetComponentLocation();
+
+                    // X축 정렬 확인
+                    if (!FMath::IsNearlyEqual(CompLocation.X, PlacedLocation.X, 1.0f))
+                        continue;
+
+                    // Y축 겹침 검사
+                    const float BlockHalfSize = 25.0f;
+                    const float ThisMinY = CompLocation.Y - BlockHalfSize;
+                    const float ThisMaxY = CompLocation.Y + BlockHalfSize;
+                    const float PlacedMinY = PlacedLocation.Y - BlockHalfSize;
+                    const float PlacedMaxY = PlacedLocation.Y + BlockHalfSize;
+
+                    const bool bYOverlap = (ThisMaxY > PlacedMinY) && (ThisMinY < PlacedMaxY);
+
+                    // Z축 겹침 검사
+                    const float ThisMinZ = CompLocation.Z - BlockHalfSize;
+                    const float ThisMaxZ = CompLocation.Z + BlockHalfSize;
+                    const float PlacedMinZ = PlacedLocation.Z - BlockHalfSize;
+                    const float PlacedMaxZ = PlacedLocation.Z + BlockHalfSize;
+
+                    const bool bZOverlap = (ThisMaxZ > PlacedMinZ) && (ThisMinZ < PlacedMaxZ);
+
+                    // 충돌 발생 시 Y축 조정
+                    if (bYOverlap && bZOverlap)
+                    {
+                        const float OverlapY = CompLocation.Y - PlacedLocation.Y;
+                        RequiredAdjustment.Y += (OverlapY > 0) ? 50.0f : -50.0f;
+                        bNeedMoreCheck = true;
+                    }
+                }
+            }
+        }
+
+        // 조정 적용
+        if (bNeedMoreCheck)
+        {
+            SpawnedBlock->AddActorWorldOffset(RequiredAdjustment);
+            TotalAdjustment += RequiredAdjustment;
+        }
+    }
+
+    // 4. 최종 검증
+    if (IsCollidingWithAnything())
+    {
+        // 충돌 시 원상태 복구
+        SpawnedBlock->SetActorRotation(OriginalRotation);
+        SpawnedBlock->SetActorLocation(OriginalLocation);
+    }
+}
+
+bool ABlockSpawner::IsCollidingWithAnything() const
+{
+    if (!SpawnedBlock) return false;
+
+    const float BlockHalfSize = 25.0f;
+    const float MinYBoundary = -(GridSizeX - 1) * 25.0f;
+    const float MaxYBoundary = GridSizeX * 25.0f;
+    const float MinZBoundary = 25.0f;
 
     TArray<UActorComponent*> Components;
     SpawnedBlock->GetComponents(Components);
 
+    USceneComponent* RootComp = SpawnedBlock->GetRootComponent();
+
+    // 모든 컴포넌트 검사
     for (UActorComponent* Component : Components)
     {
-        USceneComponent* SceneComponent = Cast<USceneComponent>(Component);
-        if (SceneComponent)
-        {
-            FVector ComponentLocation = SceneComponent->GetComponentLocation();
+        USceneComponent* SceneComp = Cast<USceneComponent>(Component);
+        if (!SceneComp || SceneComp == RootComp) continue;
 
-            if (ComponentLocation.Y < -(GridSizeX - 1) * 25.0f)
+        const FVector CompLocation = SceneComp->GetComponentLocation();
+
+        // 1. 경계 영역 충돌 검사
+        if (CompLocation.Y < MinYBoundary || CompLocation.Y > MaxYBoundary)
+            return true;
+
+        if (CompLocation.Z < MinZBoundary)
+            return true;
+
+        // 2. 다른 블록과의 충돌 검사
+        for (AActor* PlacedBlock : PlacedBlocks)
+        {
+            if (!PlacedBlock) continue;
+
+            TArray<UActorComponent*> PlacedComponents;
+            PlacedBlock->GetComponents(PlacedComponents);
+
+            for (UActorComponent* PlacedComponent : PlacedComponents)
             {
-                FTransform TransformOffset(FRotator::ZeroRotator, FVector(0.0f, 50.0f, 0.0f));
-                SpawnedBlock->AddActorWorldTransform(TransformOffset);
-            }
-            else if (ComponentLocation.Y > (GridSizeX) * 25.0f)
-            {
-                FTransform TransformOffset(FRotator::ZeroRotator, FVector(0.0f, -50.0f, 0.0f));
-                SpawnedBlock->AddActorWorldTransform(TransformOffset);
+                USceneComponent* PlacedSceneComp = Cast<USceneComponent>(PlacedComponent);
+                if (!PlacedSceneComp) continue;
+
+                const FVector PlacedLocation = PlacedSceneComp->GetComponentLocation();
+
+                // X축 정렬 확인 (같은 열인지)
+                if (!FMath::IsNearlyEqual(CompLocation.X, PlacedLocation.X, 1.0f))
+                    continue;
+
+                // Y축 겹침 검사
+                const float ThisMinY = CompLocation.Y - BlockHalfSize;
+                const float ThisMaxY = CompLocation.Y + BlockHalfSize;
+                const float PlacedMinY = PlacedLocation.Y - BlockHalfSize;
+                const float PlacedMaxY = PlacedLocation.Y + BlockHalfSize;
+
+                const bool bYOverlap = (ThisMaxY > PlacedMinY) && (ThisMinY < PlacedMaxY);
+
+                // Z축 겹침 검사
+                const float ThisMinZ = CompLocation.Z - BlockHalfSize;
+                const float ThisMaxZ = CompLocation.Z + BlockHalfSize;
+                const float PlacedMinZ = PlacedLocation.Z - BlockHalfSize;
+                const float PlacedMaxZ = PlacedLocation.Z + BlockHalfSize;
+
+                const bool bZOverlap = (ThisMaxZ > PlacedMinZ) && (ThisMinZ < PlacedMaxZ);
+
+                // 3D 공간에서의 완전한 충돌 확인
+                if (bYOverlap && bZOverlap)
+                {
+                    return true;
+                }
             }
         }
     }
+
+    return false;
 }
 
 void ABlockSpawner::CheckAndClearLines()
 {
-    // Collect all valid blocks and components
+    ZCount.Init(0, GridSizeX);
+
+    auto GetZIndex = [&](float Z)
+    {
+        return FMath::Clamp(
+            FMath::FloorToInt(Z / 50.0f),
+            0,
+            GridSizeX - 1
+        );
+    };
+
     for (AActor* Block : PlacedBlocks)
     {
         if (!Block) continue;
 
-        ValidBlocks.Add(Block);
-        TArray<UActorComponent*> Components;
-        Block->GetComponents(Components);
+        TArray<USceneComponent*> PlacedComponents;
+        Block->GetComponents(PlacedComponents);
 
-        for (UActorComponent* Comp : Components)
+        USceneComponent* RootComp = Block->GetRootComponent();
+
+        for (UActorComponent* Comp : PlacedComponents)
         {
-            if (USceneComponent* SceneComp = Cast<USceneComponent>(Comp))
+            USceneComponent* SceneComp = Cast<USceneComponent>(Comp);
+            if (!SceneComp || SceneComp == RootComp) continue;
+
+            const int32 ZIdx = GetZIndex(SceneComp->GetComponentLocation().Z);
+            ZCount[ZIdx]++;
+        }
+    }
+
+    for (int32 i = 0; i < GridSizeX; ++i)
+    {
+        if (ZCount[i] >= GridSizeX)
+        {
+            for (AActor* Block : PlacedBlocks)
             {
-                AllComponents.Add(SceneComp);
-            }
-        }
-    }
-    PlacedBlocks = ValidBlocks;
+                if (!Block) continue;
 
-    // Group components by Z coordinate
-    TMap<float, TSet<int32>> GridMap;
-    for (USceneComponent* Comp : AllComponents)
-    {
-        FVector Location = Comp->GetComponentLocation();
-        int32 XIndex = FMath::RoundToInt(Location.X / 50.0f);
-        float Z = Location.Z;
+                TArray<UActorComponent*> PlacedComponents;
+                Block->GetComponents(PlacedComponents);
 
-        if (XIndex >= 0 && XIndex < GridSizeX)
-        {
-            GridMap.FindOrAdd(Z).Add(XIndex);
-        }
-    }
-
-    // Find complete lines
-    TArray<float> FullLines;
-    for (const auto& Elem : GridMap)
-    {
-        if (Elem.Value.Num() == GridSizeX)
-        {
-            FullLines.Add(Elem.Key);
-        }
-    }
-
-    if (FullLines.Num() == 0) return;
-
-    // Sort lines from bottom to top
-    FullLines.Sort();
-
-    // Destroy components in complete lines
-    TArray<USceneComponent*> ToDestroy;
-    for (USceneComponent* Comp : AllComponents)
-    {
-        if (FullLines.Contains(Comp->GetComponentLocation().Z))
-        {
-            ToDestroy.Add(Comp);
-        }
-    }
-
-    // Move components above cleared lines down
-    const float MoveDistance = FullLines.Num() * 50.0f;
-    for (USceneComponent* Comp : AllComponents)
-    {
-        if (!ToDestroy.Contains(Comp))
-        {
-            FVector Location = Comp->GetComponentLocation();
-            bool bShouldMove = false;
-
-            for (float ClearedZ : FullLines)
-            {
-                if (Location.Z > ClearedZ)
+                for (UActorComponent* Comp : PlacedComponents)
                 {
-                    bShouldMove = true;
-                    break;
+                    USceneComponent* SceneComp = Cast<USceneComponent>(Comp);
+                    if (!SceneComp) continue;
+
+                    int num = static_cast<int>((SceneComp->GetComponentLocation().Z - 25.0f) / 50.0f);
+
+                    if (num == i)
+                    {
+                        SceneComp->DestroyComponent();
+                    }
                 }
             }
-
-            if (bShouldMove)
-            {
-                Comp->SetWorldLocation(Location - FVector(0, 0, MoveDistance));
-            }
         }
     }
 
-    // Destroy marked components
-    for (USceneComponent* Comp : ToDestroy)
+    for (int i = 0; i < GridSizeX; ++i)
     {
-        Comp->DestroyComponent();
+        if (ZCount[i] >= GridSizeX)
+        {
+            for (AActor* Block : PlacedBlocks)
+            {
+                if (!Block) continue;
+
+                TArray<UActorComponent*> PlacedComponents;
+                Block->GetComponents(PlacedComponents);
+
+                for (UActorComponent* Comp : PlacedComponents)
+                {
+                    USceneComponent* SceneComp = Cast<USceneComponent>(Comp);
+                    if (!SceneComp) continue;
+
+                    int num = static_cast<int>((SceneComp->GetComponentLocation().Z - 25.0f) / 50.0f);
+
+                    if (num > i)
+                    {
+                        FTransform TransformOffset(FRotator::ZeroRotator, FVector(0.0f, 0.0f, -50.0f));
+                        SceneComp->AddWorldTransform(TransformOffset);
+                    }
+                }
+            }
+        }
     }
-
-    //// Cleanup empty actors (NEW CODE)
-    //TArray<AActor*> ToRemove;
-    //for (AActor* Block : PlacedBlocks)
-    //{
-    //    if (!Block) continue;
-
-    //    TArray<UActorComponent*> Comps;
-    //    Block->GetComponents(Comps);
-
-    //    bool bHasComponents = false;
-    //    for (UActorComponent* Comp : Comps)
-    //    {
-    //        if (Comp)// && !Comp->IsPendingKill())
-    //        {
-    //            bHasComponents = true;
-    //            break;
-    //        }
-    //    }
-
-    //    if (!bHasComponents)
-    //    {
-    //        ToRemove.Add(Block);
-    //    }
-    //}
-
-    //for (AActor* Block : ToRemove)
-    //{
-    //    PlacedBlocks.Remove(Block);
-    //    Block->Destroy();
-    //}
 }
