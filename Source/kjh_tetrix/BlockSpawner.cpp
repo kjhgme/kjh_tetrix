@@ -486,31 +486,79 @@ void ABlockSpawner::CheckAndClearLines()
         }
     }
 
-    for (int i = GridSizeX - 1; i >= 0; --i)
+    //for (int i = GridSizeX - 1; i >= 0; --i)
+    //{
+    //    if (ZCount[i] >= GridSizeX)
+    //    {
+    //        for (AActor* Block : PlacedBlocks)
+    //        {
+    //            if (!Block) continue;
+
+    //            TArray<UActorComponent*> PlacedComponents;
+    //            Block->GetComponents(PlacedComponents);
+
+    //            for (UActorComponent* Comp : PlacedComponents)
+    //            {
+    //                USceneComponent* SceneComp = Cast<USceneComponent>(Comp);
+    //                if (!SceneComp) continue;
+
+    //                int num = static_cast<int>((SceneComp->GetComponentLocation().Z - 25.0f) / 50.0f);
+
+    //                if (num > i)
+    //                {
+    //                    SceneComp->AddWorldOffset(FVector(0.0f, 0.0f, -50.0f));
+    //                }
+    //            }
+    //        }
+    //    }
+    //}
+
+
+    ///////////////////////////////////////////////////
+
+
+   TArray<int32> LayersToRemove;
+    for (int i = 0; i < GridSizeX; ++i)
     {
         if (ZCount[i] >= GridSizeX)
         {
-            for (AActor* Block : PlacedBlocks)
-            {
-                if (!Block) continue;
-
-                TArray<UActorComponent*> PlacedComponents;
-                Block->GetComponents(PlacedComponents);
-
-                for (UActorComponent* Comp : PlacedComponents)
-                {
-                    USceneComponent* SceneComp = Cast<USceneComponent>(Comp);
-                    if (!SceneComp) continue;
-
-                    int num = static_cast<int>((SceneComp->GetComponentLocation().Z - 25.0f) / 50.0f);
-
-                    if (num > i)
-                    {
-                        SceneComp->AddWorldOffset(FVector(0.0f, 0.0f, -50.0f));
-                    }
-                }
-            }
+            LayersToRemove.Add(i);
         }
     }
 
+    LayersToRemove.Sort([](int32 A, int32 B) { return A > B; });
+
+    for (AActor* Block : PlacedBlocks)
+    {
+        if (!Block) continue;
+
+        TArray<UActorComponent*> PlacedComponents;
+        Block->GetComponents(PlacedComponents);
+
+        for (UActorComponent* Comp : PlacedComponents)
+        {
+            USceneComponent* SceneComp = Cast<USceneComponent>(Comp);
+            if (!SceneComp) continue;
+
+            const float OriginalZ = SceneComp->GetComponentLocation().Z;
+            int32 OriginalLayer = static_cast<int>((OriginalZ - 25.0f) / 50.0f);
+
+            int32 LayersBelow = 0;
+            for (int32 RemovedLayer : LayersToRemove)
+            {
+                if (RemovedLayer < OriginalLayer)
+                {
+                    LayersBelow++;
+                }
+            }
+
+            if (LayersBelow > 0)
+            {
+                SceneComp->SetWorldLocation(
+                    SceneComp->GetComponentLocation() +
+                    FVector(0, 0, -50.0f * LayersBelow)
+                );
+            }
+        }
+    }
 }
