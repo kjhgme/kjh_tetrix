@@ -486,7 +486,7 @@ void ABlockSpawner::CheckAndClearLines()
         }
     }
 
-    for (int i = 0; i < GridSizeX; ++i)
+    for (int i = GridSizeX - 1; i >= 0; --i)
     {
         if (ZCount[i] >= GridSizeX)
         {
@@ -506,11 +506,11 @@ void ABlockSpawner::CheckAndClearLines()
 
                     if (num > i)
                     {
-                        FTransform TransformOffset(FRotator::ZeroRotator, FVector(0.0f, 0.0f, -50.0f));
-                        SceneComp->AddWorldTransform(TransformOffset);
+                        SceneComp->AddWorldOffset(FVector(0.0f, 0.0f, -50.0f));
                     }
                 }
             }
         }
     }
+
 }
