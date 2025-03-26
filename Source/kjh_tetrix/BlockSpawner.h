@@ -30,6 +30,9 @@ public:
 	AActor* SpawnedBlock;
 
 	TArray<AActor*> PlacedBlocks;
+	
+	TArray<USceneComponent*> AllComponents;
+	TArray<AActor*> ValidBlocks;
 
 	UFUNCTION(BlueprintCallable)
 	void SpawnBlock();
@@ -45,6 +48,11 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 	void MoveToBottom();
+
+	UFUNCTION(BlueprintCallable)
+	void Rotate();
+
+	void CheckAndClearLines();
 
 	UFUNCTION(BlueprintCallable)
 	void GetMapSize(int GridX, int GridY)
