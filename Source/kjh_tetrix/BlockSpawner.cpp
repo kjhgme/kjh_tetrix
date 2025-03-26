@@ -426,6 +426,11 @@ void ABlockSpawner::CheckAndClearLines()
 {
     ZCount.Init(0, GridSizeX);
 
+    for (int i = 0; i < GridSizeX; ++i)
+    {
+        ZCount[i] = 0;
+    }
+
     auto GetZIndex = [&](float Z)
     {
         return FMath::Clamp(
